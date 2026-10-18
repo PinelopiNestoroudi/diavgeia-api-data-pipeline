@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Diavgeia API Explorer</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script type="module" src="/js/app.js"></script>
+</head>
+<body>
+  <header><div class="container"><p class="eyebrow">PUBLIC DATA / API INTEGRATION</p>
+    <h1>Diavgeia API Explorer</h1><p>Explore organizations, decisions and organizational units.</p>
+    <p id="source" class="badge">Connecting to local service…</p></div></header>
+  <main class="container">
+    <div role="tablist" aria-label="Data views">
+      <button id="tab-decisions" role="tab" aria-selected="true" aria-controls="decisions" tabindex="0">Decisions</button>
+      <button id="tab-organizations" role="tab" aria-selected="false" aria-controls="organizations" tabindex="-1">Organizations</button>
+      <button id="tab-units" role="tab" aria-selected="false" aria-controls="units" tabindex="-1">Organizational units</button>
+    </div>
+    <section id="decisions" role="tabpanel" aria-labelledby="tab-decisions">
+      <h2>Search decisions</h2>
+      <p>Choose an organization and up to 180 inclusive calendar days. Results are fetched on demand.</p>
+      <form id="decision-form">
+        <label>Organization UID<input id="org" name="org" required pattern="[0-9]{1,20}" inputmode="numeric" value="99206919"></label>
+        <label>Start date<input id="start" name="start" type="date" value="2025-05-01" required></label>
+        <label>End date<input id="end" name="end" type="date" value="2025-05-02" required></label>
+        <label>API status<select id="status" name="status"><option value="all">All</option><option value="published">Published</option><option value="revoked">Revoked</option></select></label>
+        <div class="actions"><button type="submit">Retrieve decisions</button><button id="next-period" type="button" class="secondary">Next period</button></div>
+      </form>
+      <p class="note">Dates follow the API's date-range semantics. Displayed timestamps and SQL month groups use UTC.</p>
+      <div id="decision-summary" class="metrics" aria-live="polite"></div>
+      <label class="inline"><input id="private-only" type="checkbox"> Show only revoked decisions with private-data indicator</label>
+      <p class="note">The indicator is API metadata; it does not describe the content or legal status of a document.</p>
+      <p id="decision-message" role="status" aria-live="polite">No search run yet.</p>
+      <div class="table-wrap" role="region" aria-label="Decision results, scroll horizontally if needed" tabindex="0">
+        <table><caption>Retrieved decisions</caption><thead><tr><th scope="col">ADA</th><th scope="col">Subject</th><th scope="col">Issued (UTC)</th><th scope="col">Status</th><th scope="col">Private-data indicator</th></tr></thead><tbody id="decision-rows"></tbody></table>
+      </div>
+    </section>
+    <section id="organizations" role="tabpanel" aria-labelledby="tab-organizations" hidden>
+      <h2>Explore organizations</h2>
+      <form id="organization-form"><label>Category<select name="category"><option value="">All organizations</option><option value="UNIVERSITY">Universities</option></select></label><button type="submit">Retrieve organizations</button></form>
+      <p id="organization-message" role="status" aria-live="polite">No search run yet.</p>
+      <div class="table-wrap" role="region" aria-label="Organization results" tabindex="0"><table><caption>Organizations</caption><thead><tr><th scope="col">UID</th><th scope="col">Name</th><th scope="col">Category</th><th scope="col">Website</th></tr></thead><tbody id="organization-rows"></tbody></table></div>
+    </section>
+    <section id="units" role="tabpanel" aria-labelledby="tab-units" hidden>
+      <h2>Active organizational units</h2><p>Direct children of the selected organization, as returned by the API.</p>
+      <form id="unit-form"><label>Organization UID<input name="org" id="unit-org" required pattern="[0-9]{1,20}" inputmode="numeric" value="99206919"></label><button type="submit">Retrieve units</button></form>
+      <p id="unit-message" role="status" aria-live="polite">No search run yet.</p>
+      <div class="table-wrap" role="region" aria-label="Unit results" tabindex="0"><table><caption>Active units</caption><thead><tr><th scope="col">UID</th><th scope="col">Name</th><th scope="col">Active</th><th scope="col">Parent UID</th></tr></thead><tbody id="unit-rows"></tbody></table></div>
+    </section>
+  </main>
+  <footer class="container">Portfolio version maintained by Pinelopi Nestoroudi. Public API data may change; retrieved results are snapshots.</footer>
+</body>
+</html>

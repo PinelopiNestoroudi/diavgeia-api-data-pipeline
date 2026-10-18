@@ -1,0 +1,95 @@
+{
+  "organizations": [
+    {
+      "uid": "90000001",
+      "label": "Demonstration University",
+      "category": "UNIVERSITY",
+      "website": "https://example.org"
+    },
+    {
+      "uid": "90000002",
+      "label": "Demonstration Public Agency",
+      "category": "OTHER",
+      "website": null
+    }
+  ],
+  "units": [
+    {
+      "uid": "91000001",
+      "label": "Demonstration Finance Unit",
+      "active": true,
+      "parentId": "90000001"
+    },
+    {
+      "uid": "91000002",
+      "label": "Demonstration Data Office",
+      "active": true,
+      "parentId": "90000001"
+    }
+  ],
+  "decisions": [
+    {
+      "ada": "SAMPLE-001",
+      "organizationId": "90000001",
+      "subject": "Demonstration equipment purchase",
+      "protocolNumber": "DEMO/1",
+      "issueDate": 1746057600000,
+      "status": "PUBLISHED",
+      "privateData": false
+    },
+    {
+      "ada": "SAMPLE-002",
+      "organizationId": "90000001",
+      "subject": "Demonstration withdrawn decision",
+      "protocolNumber": "DEMO/2",
+      "issueDate": 1746144000000,
+      "status": "REVOKED",
+      "privateData": true
+    },
+    {
+      "ada": "SAMPLE-003",
+      "organizationId": "90000001",
+      "subject": "Demonstration maintenance approval",
+      "protocolNumber": null,
+      "issueDate": 1746489600000,
+      "status": "PUBLISHED",
+      "privateData": null
+    },
+    {
+      "ada": "SAMPLE-004",
+      "organizationId": "90000001",
+      "subject": "Demonstration cancelled procurement",
+      "protocolNumber": "DEMO/4",
+      "issueDate": 1747699200000,
+      "status": "REVOKED",
+      "privateData": false
+    },
+    {
+      "ada": "SAMPLE-005",
+      "organizationId": "90000002",
+      "subject": "Demonstration service renewal",
+      "protocolNumber": "DEMO/5",
+      "issueDate": 1748736000000,
+      "status": "PUBLISHED",
+      "privateData": false
+    },
+    {
+      "ada": "SAMPLE-006",
+      "organizationId": "90000002",
+      "subject": "Demonstration budget approval",
+      "protocolNumber": "DEMO/6",
+      "issueDate": 1748908800000,
+      "status": "PUBLISHED",
+      "privateData": false
+    },
+    {
+      "ada": "SAMPLE-001",
+      "organizationId": "90000001",
+      "subject": "Demonstration equipment purchase",
+      "protocolNumber": "DEMO/1",
+      "issueDate": 1746057600000,
+      "status": "PUBLISHED",
+      "privateData": false
+    }
+  ]
+}
