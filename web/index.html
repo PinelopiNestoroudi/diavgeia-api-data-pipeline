@@ -32,6 +32,22 @@
       <label class="inline"><input id="private-only" type="checkbox"> Show only revoked decisions with private-data indicator</label>
       <p class="note">The indicator is API metadata; it does not describe the content or legal status of a document.</p>
       <p id="decision-message" role="status" aria-live="polite">No search run yet.</p>
+      <div class="actions" aria-label="Search result actions">
+        <button id="save-search" type="button" disabled>Save search results (0)</button>
+        <button id="export-search" type="button" class="secondary" disabled>Export search results (0)</button>
+      </div>
+      <p id="snapshot-message" class="note" role="status" aria-live="polite">Search does not save data. Results are available for saving or export for 10 minutes.</p>
+      <div id="local-data" class="local-data" aria-labelledby="local-data-title">
+        <h3 id="local-data-title">Local data</h3>
+        <p id="storage-mode" class="note">Checking local storage mode…</p>
+        <p>Stored decisions: <strong id="stored-count" aria-live="polite">—</strong></p>
+        <div class="actions">
+          <button id="refresh-count" type="button" class="secondary">Refresh count</button>
+          <button id="export-stored" type="button" class="secondary" disabled>Export stored decisions</button>
+          <button id="clear-stored" type="button" class="danger" disabled>Clear stored decisions</button>
+        </div>
+        <p id="storage-message" role="status" aria-live="polite">Checking stored decision count…</p>
+      </div>
       <div class="table-wrap" role="region" aria-label="Decision results, scroll horizontally if needed" tabindex="0">
         <table><caption>Retrieved decisions</caption><thead><tr><th scope="col">ADA</th><th scope="col">Subject</th><th scope="col">Issued (UTC)</th><th scope="col">Status</th><th scope="col">Private-data indicator</th></tr></thead><tbody id="decision-rows"></tbody></table>
       </div>
@@ -49,6 +65,13 @@
       <div class="table-wrap" role="region" aria-label="Unit results" tabindex="0"><table><caption>Active units</caption><thead><tr><th scope="col">UID</th><th scope="col">Name</th><th scope="col">Active</th><th scope="col">Parent UID</th></tr></thead><tbody id="unit-rows"></tbody></table></div>
     </section>
   </main>
+  <dialog id="confirmation" aria-labelledby="confirmation-title" aria-describedby="confirmation-message">
+    <form method="dialog">
+      <h2 id="confirmation-title">Confirm local data action</h2>
+      <p id="confirmation-message"></p>
+      <div class="actions"><button value="cancel" class="secondary" autofocus>Cancel</button><button id="confirmation-action" value="confirm">Confirm</button></div>
+    </form>
+  </dialog>
   <footer class="container">Portfolio version maintained by Pinelopi Nestoroudi. Public API data may change; retrieved results are snapshots.</footer>
 </body>
 </html>

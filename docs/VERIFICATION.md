@@ -32,12 +32,28 @@ cache files from being generated.
 
 ## Tests
 
-Latest automated result (2026-10-18): **29 tests passed**. Date-boundary checks
+Latest automated result (2026-10-18): **54 tests passed**. Date-boundary checks
 explicitly assert that same-day ranges are accepted.
 Coverage includes pagination boundaries, repeated pages, early termination,
 malformed responses, input dates, optional fields, HTTP failures/retry exhaustion,
 duplicate merging, SQLite constraints, rollback, idempotency, Unicode and CSV
 formula protection, fixed local routes, host restrictions and file-access limits.
+
+The 25 additional workflow tests cover immutable snapshot creation, ten-minute
+absolute expiry, unknown IDs, oldest-entry eviction, concurrent cache access,
+read-only search/count, exact snapshot export, complete-only saves, repeat-save
+idempotency, partial export labels, invalid-input rejection, storage counts,
+confirmed clear and schema/index preservation. They also cover source/ingestion
+validation failures, transactional ingestion/clear rollback, read-only searches of
+changed source data, updating saved ADAs, incremental safe CSV generation,
+and stored-export consistency during a concurrent writer (using a temporary WAL
+database for that test only).
+
+Default-path tests execute the CLI in temporary directories for sample/live modes
+with no `--db`, a custom path, and an explicit live-default path. Explicit overrides
+win in every case. Browser default-path tests verify separate sample/live files.
+All three browser JavaScript modules passed Node syntax checks; Node is only a
+development check and remains unnecessary for running the application.
 
 ## Live compatibility
 
@@ -65,9 +81,32 @@ Checked the actual in-app Chromium viewer in synthetic mode:
   permits the start date to equal the end date.
 - Arrow-key tab navigation changed the selected panel and keyboard focus.
 - Narrow viewport layout and horizontal table scrolling were inspected.
-- No browser console errors were recorded during these checks.
+- A JavaScript startup error found during implementation was corrected. The final
+  module syntax checks and subsequent browser actions succeeded.
 
-Four screenshots are included. Screenshots were visually inspected, encoded as
+### Interactive local data workflow
+
+- Started the sample viewer with no local database. Initial count was zero and
+  search returned four rows without saving them.
+- Saved through the explicit synthetic-data confirmation and repeated Save.
+  Each action processed four rows and the stored count stayed at four unique ADAs.
+- Downloaded current-search and stored-data CSV files through the browser. Both
+  files contained four records and four distinct ADAs.
+- Stored export displayed the refreshed count before confirmation. Refresh count
+  separately reported four stored decisions.
+- Cancelled Clear: four rows remained. Confirmed Clear: zero remained. Direct
+  SQLite inspection verified the `decisions` table, primary key index and
+  organization/date index remained. Current search results stayed visible.
+- The default live database was not created during sample-mode checks.
+- Used an isolated server with a controlled synthetic partial upstream response:
+  Save was disabled, Export remained available, and a warning preceded download.
+  The resulting `sample-search-decisions-partial.csv` contained two rows. This
+  test did not alter the production API client or introduce a shipped test mode.
+- Unknown and expired IDs returned HTTP 410 for both Save and snapshot export in
+  integration tests. Expiry was verified with an injected clock rather than a
+  ten-minute wall-clock wait.
+
+Six screenshots are included. Screenshots were visually inspected, encoded as
 PNG and stripped of image metadata. Broader cross-browser and assistive-technology
 testing has not been performed.
 

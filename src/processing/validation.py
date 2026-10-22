@@ -1,7 +1,10 @@
 """Small, explicit contracts for user input and upstream records."""
 
 import re
+from collections.abc import Mapping
 from datetime import date, datetime, timezone
+
+DECISION_FIELDS = ("ada", "organization_id", "subject", "protocol_number", "issued_at_utc", "status", "private_data")
 
 
 class ValidationError(ValueError):
@@ -65,11 +68,35 @@ def normalize(record):
             issued = datetime.fromtimestamp(timestamp / 1000, timezone.utc).isoformat(timespec="seconds")
         except (ValueError, OverflowError, OSError):
             raise ValidationError("Invalid issueDate timestamp.") from None
-    return {"ada": ada, "organization_id": org,
+    return validate_normalized({"ada": ada, "organization_id": org,
             "subject": text(record.get("subject"), "subject"),
             "protocol_number": text(record.get("protocolNumber"), "protocolNumber"),
             "issued_at_utc": issued, "status": status,
-            "private_data": None if private is None else int(private)}
+            "private_data": None if private is None else int(private)})
+
+
+def validate_normalized(record):
+    """Shared contract for collector output, in-memory snapshots and ingestion."""
+    if not isinstance(record, Mapping) or set(record) != set(DECISION_FIELDS):
+        raise ValidationError("Invalid normalized decision fields.")
+    issued = record["issued_at_utc"]
+    if issued is not None:
+        try:
+            if not isinstance(issued, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00", issued):
+                raise ValueError
+            datetime.fromisoformat(issued)
+        except ValueError:
+            raise ValidationError("Invalid UTC issue timestamp.") from None
+    private = record["private_data"]
+    if private is not None and (type(private) is not int or private not in (0, 1)):
+        raise ValidationError("Private-data indicator must be 0, 1 or null.")
+    return {"ada": text(record["ada"], "ada", required=True),
+            "organization_id": identifier(record["organization_id"]),
+            "subject": text(record["subject"], "subject"),
+            "protocol_number": text(record["protocol_number"], "protocolNumber"),
+            "issued_at_utc": issued,
+            "status": text(record["status"], "status", required=True).upper(),
+            "private_data": private}
 
 
 def lookup_rows(payload, kind):

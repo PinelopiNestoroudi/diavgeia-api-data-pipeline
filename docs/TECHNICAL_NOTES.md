@@ -23,6 +23,75 @@ retries. Backoff is 1 then 2 seconds; numeric `Retry-After` is respected up to 1
 seconds. HTTP-date retry headers use the normal backoff. Timeout is 15 seconds per
 attempt. Error messages omit upstream bodies and connection details.
 
+## Local browser routes
+
+| Route | Contract |
+| --- | --- |
+| `GET /api/decisions` | Existing query parameters. Returns rows, completeness, counts, `snapshot_id` and `snapshot_expires_at`. No SQLite writes. |
+| `GET /api/storage` | Returns `stored_count` and `sample`. A missing database means zero, without file creation. |
+| `POST /api/storage/save` | Accepts only `{"snapshot_id":"…"}`. Upserts complete snapshot rows, returning `processed` and `stored_count`. |
+| `GET /api/snapshot/{snapshot_id}/export.csv` | Exports the server-held rows. Partial exports have `-partial.csv` in the filename and `X-Partial-Results: true`. |
+| `GET /api/storage/export.csv` | Exports the full current mode's database with `X-Record-Count`. Missing databases produce a header-only CSV. |
+| `POST /api/storage/clear` | Accepts only `{"confirm":true}`. Transactional `DELETE FROM decisions`, returning removed records as `processed` and the remaining count. |
+
+Write requests require the exact local viewer Origin, JSON and a Content-Length of
+1–2048 bytes. Client-supplied rows, completeness flags, filesystem paths and extra
+fields are rejected. Host and cross-site checks also cover reads. There are no accounts,
+credentials or cross-origin permissions.
+
+Invalid input returns HTTP 400, disallowed origins 403, unavailable snapshots 410,
+incomplete snapshot saves 409, and local storage errors 500. Mutations are not
+automatically retried or cancelled by the browser: a lost response may follow a
+successful commit, so refresh the count before retrying. A repeat Save remains idempotent.
+
+## Snapshot lifecycle and local persistence
+
+Each server process holds at most five snapshots for ten minutes from creation.
+IDs are random, rows are validated copies exposed internally through immutable
+mappings, and completeness comes from the collector. A lock protects creation,
+expiry and eviction. Expiry uses a monotonic clock; the response also provides a
+UTC wall-clock expiry for UI feedback. Reads do not extend the lifetime.
+
+Complete empty searches receive snapshots. Partial searches receive snapshots if
+they have validated rows. Failures before any usable rows receive no snapshot.
+Expired entries are removed on access/creation; the oldest entry is evicted at
+capacity. Unknown/expired/evicted IDs all return 410. A resolved operation may
+finish after expiry. Restarting the server discards all snapshots, but not saved data.
+No snapshot or search-history tables exist.
+
+Browser sample/live defaults are `data/local/sample.sqlite` and
+`data/local/diavgeia.sqlite`, resolved from the repository root. CLI collection
+uses those respective relative defaults only when `--db` is omitted. Explicit
+`--db` overrides always take precedence, even if deliberately choosing a shared
+file. CLI report/export retain their live defaults and accept sample paths via `--db`.
+
+Source normalization, snapshots and ingestion share normalized-field validation.
+Save validates all rows before a single atomic ADA upsert transaction. Save/clear
+operations are serialized within a viewer process. Processed counts describe input
+records, not newly inserted records. Clear deletes rows, preserving the file,
+single `decisions` table, primary key and organization/date index. Valid snapshots
+can still be saved after Clear, but only through another explicit Save action.
+
+## CSV downloads and consistency
+
+The CLI and both HTTP exports share `csv_lines()`: one header and one safely
+escaped UTF-8 row at a time, ordered by ADA. Formula protection and NULL semantics
+are identical. Only one formatted CSV record is buffered, rather than the full
+stored dataset. A single exceptionally large field still requires memory for that row.
+
+Stored export opens SQLite read-only, starts a read transaction, obtains its count
+and iterates its cursor in the same snapshot. The HTTP response is streamed until
+connection close without a Content-Length. The browser uses a native download
+instead of collecting the complete file into a JavaScript Blob. UI feedback confirms
+the download request, not its eventual completion; use the browser downloads view
+to check transfer errors. A disconnect or streaming error can leave a partial download.
+
+Search exports contain at most the bounded search result and use a browser Blob to
+allow HTTP 410 feedback in-page. No server-side export files are generated.
+The count shown before stored-export confirmation is refreshed, but another CLI
+process can change the database before the download begins. The response's count
+and rows always refer to the same read snapshot.
+
 ## Limitations
 
 - This is a local portfolio tool, not a hosted production service. The standard-library
@@ -41,6 +110,11 @@ attempt. Error messages omit upstream bodies and connection details.
   an already-running server-side request can continue until its bounded work ends.
 - Browser results are bounded but not virtualized. Prefer the CLI for larger
   collections. The browser's two-minute request timeout may require a narrower query.
+- A long stored-data download holds a SQLite read transaction. With the default
+  journal mode it can delay concurrent writers, which may report a busy-database
+  error. This single-user tool deliberately adds no background export jobs or WAL configuration.
+- Sample/live separation applies to defaults. Existing mixed custom databases are
+  not migrated or classified automatically, and explicit CLI overrides remain under user control.
 - CSV formula protection prefixes potentially executable text with an apostrophe.
   SQLite retains the normalized original text. CSV empty cells represent NULL.
 - Offline data is fictional, API-shaped demonstration data, not evidence of real

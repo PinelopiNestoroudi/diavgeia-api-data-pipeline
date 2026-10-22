@@ -8,7 +8,7 @@ from pathlib import Path
 
 from src.collector.client import APIError, Client, SampleClient
 from src.collector.pipeline import collect
-from src.database.store import connect, export_csv, ingest
+from src.database.store import connect, default_database, export_csv, ingest
 from src.processing.validation import ValidationError
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -25,7 +25,7 @@ def main():
     collector.add_argument("--page-size", type=int, default=100)
     collector.add_argument("--max-pages", type=int, default=20)
     collector.add_argument("--sample", action="store_true", help="Use explicitly synthetic offline data")
-    collector.add_argument("--db", default="data/local/diavgeia.sqlite")
+    collector.add_argument("--db", default=None, help="Override the sample/live default database")
     exporter = commands.add_parser("export", help="Export stored decisions to safe UTF-8 CSV")
     exporter.add_argument("--db", default="data/local/diavgeia.sqlite")
     exporter.add_argument("--output", default="data/local/decisions.csv")
@@ -47,7 +47,7 @@ def main():
             if not result.complete:
                 logging.error("Collection incomplete: %s No database changes made.", result.warning)
                 return 1
-            connection = connect(args.db)
+            connection = connect(args.db if args.db is not None else default_database(args.sample))
             try:
                 ingest(connection, result.rows)
             finally:

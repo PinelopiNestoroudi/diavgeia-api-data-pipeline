@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 
 from src.collector.client import APIError, Client, SampleClient
 from src.collector.pipeline import collect
-from src.database.store import connect, export_csv, ingest
+from src.database.store import FIELDS, connect, export_csv, ingest
 from src.processing.validation import ValidationError, date_range, lookup_rows, normalize, query
 from src.server import ROOT, handler
 
@@ -210,7 +210,11 @@ class StorageTests(unittest.TestCase):
         for changes in [{"private_data": 2}, {"organization_id": "bad"}, {"ada": ""}, {"issued_at_utc": "bad"}]:
             bad = dict(normalize(record("B")), **changes)
             with self.subTest(changes=changes), self.assertRaises(sqlite3.IntegrityError):
-                ingest(self.db, [normalize(record("A")), bad])
+                with self.db:
+                    self.db.executemany(
+                        f"INSERT INTO decisions VALUES ({', '.join('?' for _ in FIELDS)})",
+                        [tuple(row[field] for field in FIELDS) for row in [normalize(record("A")), bad]],
+                    )
             self.assertEqual(self.db.execute("SELECT COUNT(*) FROM decisions").fetchone()[0], 0)
 
     def test_csv_handles_unicode_missing_values_and_formulas(self):
