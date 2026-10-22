@@ -1,4 +1,11 @@
 {
+  "organization_categories": {
+    "name": "ORG_CATEGORY",
+    "items": [
+      {"uid": "UNIVERSITY", "label": "Universities", "parent": null},
+      {"uid": "OTHER", "label": "Other demonstration organizations", "parent": null}
+    ]
+  },
   "organizations": [
     {
       "uid": "90000001",

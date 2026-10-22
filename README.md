@@ -6,7 +6,7 @@ flow from an external REST API to structured storage and usable output.
 
 ## Features
 
-- **Browser explorer:** organizations, university filtering, decisions by organization/date/status,
+- **Browser explorer:** organizations by official category, decisions by organization/date/status,
   active organizational units, and clearly labelled partial results.
 - **Interactive data workflow:** explicitly save a validated search snapshot, refresh stored counts,
   download search/stored CSV files, and clear stored decisions after confirmation.
@@ -108,6 +108,12 @@ python -m src serve
 
 The live default organization is `99206919`. API labels/subjects retain their source
 language; interface controls are English.
+
+In **Organizations**, select a category from the validated official `ORG_CATEGORY`
+dictionary, then retrieve its organizations. Labels are sorted alphabetically and
+their original UIDs are submitted. Unfiltered organization retrieval is disabled.
+Sample mode provides synthetic categories offline. If categories fail to load,
+only Organizations is unavailable; reload the page to retry.
 
 Run a complete offline collection, including pagination and duplicate merging:
 

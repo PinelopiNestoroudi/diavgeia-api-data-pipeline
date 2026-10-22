@@ -11,17 +11,18 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing, redirect_stdout
 from http.server import ThreadingHTTPServer
+from html.parser import HTMLParser
 from pathlib import Path
 from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from src.__main__ import main
-from src.collector.client import APIError, SampleClient
+from src.collector.client import APIError, Client, SampleClient
 from src.collector.pipeline import Result, collect
 from src.database.store import (clear_decisions, connect, count_decisions, csv_lines,
                                 default_database, ingest)
-from src.processing.validation import ValidationError, normalize
+from src.processing.validation import ValidationError, lookup_rows, normalize, organization_categories
 from src.server import ROOT, handler
 from src.snapshots import SnapshotStore, SnapshotUnavailable
 
@@ -32,6 +33,55 @@ def sample_client():
 
 def sample_result():
     return collect(sample_client(), "90000001", "2025-05-01", "2025-05-31")
+
+
+class OrganizationCategoryTests(unittest.TestCase):
+    def test_dictionary_validation_and_field_allowlist(self):
+        payload = {"name": "ORG_CATEGORY", "items": [
+            {"uid": "Mixed_case-UID", "label": " Example ", "parent": None, "extra": "not retained"}]}
+        self.assertEqual(organization_categories(payload), [{"uid": "Mixed_case-UID", "label": "Example"}])
+
+    def test_malformed_dictionaries_rejected(self):
+        item = {"uid": "UNIVERSITY", "label": "Universities"}
+        malformed = [None, [], {}, {"name": "OTHER", "items": [item]},
+                     {"name": "ORG_CATEGORY", "items": []},
+                     {"name": "ORG_CATEGORY", "items": {}},
+                     {"name": "ORG_CATEGORY", "items": [item, item]}]
+        for bad in [None, [], {}, {"uid": 1, "label": "Name"}, {"uid": "", "label": "Name"},
+                    {"uid": "  ", "label": "Name"}, {"uid": " X ", "label": "Name"},
+                    {"uid": "X", "label": None}, {"uid": "X", "label": " "}]:
+            malformed.append({"name": "ORG_CATEGORY", "items": [bad]})
+        for payload in malformed:
+            with self.subTest(payload=payload), self.assertRaises(ValidationError):
+                organization_categories(payload)
+
+    def test_dropdown_starts_disabled_without_hardcoded_categories(self):
+        class Controls(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.controls, self.options = {}, []
+                self.in_selector = False
+
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                if attrs.get("id") in {"organization-category", "retrieve-organizations"}:
+                    self.controls[attrs["id"]] = attrs
+                if tag == "select":
+                    self.in_selector = attrs.get("id") == "organization-category"
+                if tag == "option" and self.in_selector:
+                    self.options.append(attrs)
+
+            def handle_endtag(self, tag):
+                if tag == "select":
+                    self.in_selector = False
+
+        parser = Controls()
+        parser.feed((ROOT / "web/index.html").read_text(encoding="utf-8"))
+        self.assertIn("disabled", parser.controls["organization-category"])
+        self.assertIn("required", parser.controls["organization-category"])
+        self.assertEqual(parser.controls["organization-category"]["name"], "category")
+        self.assertIn("disabled", parser.controls["retrieve-organizations"])
+        self.assertEqual(parser.options, [{"value": "", "selected": None, "disabled": None}])
 
 
 class SnapshotTests(unittest.TestCase):
@@ -149,6 +199,101 @@ class BrowserRouteTests(unittest.TestCase):
 
     def save(self, snapshot):
         return self.call("/api/storage/save", {"snapshot_id": snapshot["snapshot_id"]})[0]
+
+    def check_organizations_request(self, category):
+        payload = {"organizations": [{"uid": "90000001", "label": "Demonstration organization",
+                                      "category": "UNIVERSITY", "email": "not retained"}]}
+        requests = []
+
+        def opener(request, timeout):
+            requests.append(request.full_url)
+            data = self.client.data["organization_categories"] if "dictionaries/" in request.full_url else payload
+            response = io.BytesIO(json.dumps(data).encode("utf-8"))
+            response.status = 200
+            response.headers = {"Content-Type": "application/json"}
+            return response
+
+        with patch.object(self.client, "get_json", side_effect=Client(opener=opener).get_json) as upstream, \
+                patch("src.server.lookup_rows", wraps=lookup_rows) as lookup:
+            result, _ = self.call("/api/organizations?category=" + category)
+            self.assertEqual(upstream.call_args_list[-1].args, ("organizations.json", {"category": category}))
+            lookup.assert_called_once_with(payload, "organizations")
+        self.assertEqual(requests, ["https://diavgeia.gov.gr/opendata/dictionaries/ORG_CATEGORY.json",
+                                    "https://diavgeia.gov.gr/opendata/organizations.json?category=" + category])
+        self.assertEqual(result, {"rows": lookup_rows(payload, "organizations")})
+        self.assertNotIn("email", result["rows"][0])
+
+    def test_missing_category_never_requests_organizations_or_dictionary(self):
+        with patch.object(self.client, "get_json") as upstream:
+            for query in ["?category=", "", "?category=UNIVERSITY&extra=1", "?category=UNIVERSITY&category=OTHER"]:
+                with self.subTest(query=query):
+                    self.call("/api/organizations" + query, status=400)
+            upstream.assert_not_called()
+
+    def test_universities_sends_exact_upstream_category(self):
+        self.check_organizations_request("UNIVERSITY")
+
+    def test_another_dictionary_category_is_forwarded_and_rendered(self):
+        self.check_organizations_request("OTHER")
+
+    def test_unsupported_organization_categories_are_rejected(self):
+        self.call("/api/organization-categories")
+        with patch.object(self.client, "get_json") as upstream:
+            for category in ["ARBITRARY", "university", "ALL", "UNIVERSITY%26status=inactive"]:
+                with self.subTest(category=category):
+                    result, _ = self.call("/api/organizations?category=" + category, status=400)
+                    self.assertEqual(result, {"error": "Unsupported organization category."})
+            upstream.assert_not_called()
+
+    def test_category_dictionary_is_validated_and_cached_per_server(self):
+        with patch.object(self.client, "get_json", wraps=self.client.get_json) as upstream:
+            for _ in range(2):
+                result, _ = self.call("/api/organization-categories")
+                self.assertEqual(result, {"rows": organization_categories(self.client.data["organization_categories"])})
+            self.call("/api/organizations?category=OTHER")
+            self.assertEqual(upstream.call_args_list[0].args, ("dictionaries/ORG_CATEGORY.json", {}))
+            self.assertEqual(upstream.call_count, 2)  # One dictionary and one filtered organization call.
+
+    def test_dictionary_route_rejects_query_parameters(self):
+        with patch.object(self.client, "get_json") as upstream:
+            self.call("/api/organization-categories?category=UNIVERSITY", status=400)
+            upstream.assert_not_called()
+
+    def test_malformed_dictionary_is_not_cached_or_exposed(self):
+        valid = self.client.data["organization_categories"]
+        with patch.object(self.client, "get_json", side_effect=[{"name": "ORG_CATEGORY", "items": [{}]}, valid]) as upstream:
+            result, _ = self.call("/api/organization-categories", status=502)
+            self.assertIn("invalid", result["error"])
+            result, _ = self.call("/api/organization-categories")
+            self.assertEqual(result["rows"], organization_categories(valid))
+            self.assertEqual(upstream.call_count, 2)
+
+    def test_dictionary_failure_blocks_only_organizations_and_can_recover(self):
+        original = self.client.get_json
+
+        def unavailable(path, params):
+            if path == "dictionaries/ORG_CATEGORY.json":
+                raise APIError("Category service unavailable.")
+            return original(path, params)
+
+        with patch.object(self.client, "get_json", side_effect=unavailable) as upstream:
+            self.call("/api/organization-categories", status=502)
+            self.call("/api/organizations?category=UNIVERSITY", status=502)
+            self.assertFalse(any(call.args[0] == "organizations.json" for call in upstream.call_args_list))
+            self.assertTrue(self.call("/api/config")[0]["sample"])
+            self.assertTrue(self.call("/api/units?org=90000001")[0]["rows"])
+            snapshot = self.search()
+            self.assertTrue(snapshot["complete"])
+            self.assertEqual(self.save(snapshot)["stored_count"], 4)
+            self.assertEqual(self.call("/api/storage")[0]["stored_count"], 4)
+        self.assertTrue(self.call("/api/organization-categories")[0]["rows"])
+
+    def test_invalid_dictionary_blocks_organizations_without_upstream_organization_call(self):
+        self.client.data["organization_categories"]["name"] = "WRONG"
+        with patch.object(self.client, "get_json", wraps=self.client.get_json) as upstream:
+            self.call("/api/organizations?category=UNIVERSITY", status=502)
+            upstream.assert_called_once_with("dictionaries/ORG_CATEGORY.json", {})
+        self.assertTrue(self.search()["complete"])
 
     def test_search_and_count_are_readonly_and_snapshot_created(self):
         result = self.search()

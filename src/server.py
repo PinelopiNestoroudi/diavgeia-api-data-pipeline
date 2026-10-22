@@ -14,7 +14,7 @@ from src.collector.client import APIError, Client, SampleClient
 from src.collector.pipeline import collect
 from src.database.store import (clear_decisions, connect, connect_readonly, count_decisions,
                                 csv_lines, default_database, ingest, stored_rows)
-from src.processing.validation import ValidationError, identifier, lookup_rows
+from src.processing.validation import ValidationError, identifier, lookup_rows, organization_categories
 from src.snapshots import SnapshotStore, SnapshotUnavailable
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -29,6 +29,21 @@ def handler(client, sample=False, db_path=None, snapshots=None):
     database = Path(db_path) if db_path is not None else ROOT / default_database(sample)
     snapshot_store = snapshots if snapshots is not None else SnapshotStore()
     storage_lock = threading.Lock()
+    category_lock = threading.Lock()
+    category_cache = None
+
+    def categories():
+        nonlocal category_cache
+        # Cache only a fully validated dictionary, scoped to this server instance.
+        with category_lock:
+            if category_cache is None:
+                data = client.get_json("dictionaries/ORG_CATEGORY.json", {})
+                try:
+                    rows = organization_categories(data)
+                except ValidationError:
+                    raise APIError("The organization-category dictionary is invalid. Try again later.") from None
+                category_cache = tuple((row["uid"], row["label"]) for row in rows)
+            return [{"uid": uid, "label": label} for uid, label in category_cache]
 
     def stored_count():
         if not database.exists():
@@ -135,10 +150,17 @@ def handler(client, sample=False, db_path=None, snapshots=None):
                     prefix = "sample-" if sample else ""
                     self.stream_csv(sorted(snapshot.rows, key=lambda row: row["ada"]),
                                     f"{prefix}search-decisions{suffix}.csv", len(snapshot.rows), not snapshot.complete)
+                elif parsed.path == "/api/organization-categories":
+                    if values:
+                        raise ValidationError("Unsupported query parameter.")
+                    self.send(200, {"rows": categories()})
                 elif parsed.path == "/api/organizations":
-                    if set(values) - {"category"} or values.get("category", "") not in {"", "UNIVERSITY"}:
+                    if set(values) != {"category"} or not values["category"]:
                         raise ValidationError("Unsupported organization category.")
-                    data = client.get_json("organizations.json", values)
+                    category = values["category"]
+                    if category not in {row["uid"] for row in categories()}:
+                        raise ValidationError("Unsupported organization category.")
+                    data = client.get_json("organizations.json", {"category": category})
                     self.send(200, {"rows": lookup_rows(data, "organizations")})
                 elif parsed.path == "/api/units":
                     if set(values) != {"org"}:

@@ -2,7 +2,8 @@ import {request, post, downloadSnapshot, startDownload} from './api.js';
 import {byId, message, table, website, utcDate, counters} from './ui.js';
 
 const state = {decisions: [], versions: new Map(), snapshotId: null, complete: false,
-  expiresAt: 0, expiryTimer: null, storedCount: null, storageBusy: false, sample: null};
+  expiresAt: 0, expiryTimer: null, storedCount: null, storageBusy: false, sample: null,
+  categoryUids: new Set()};
 
 function confirmAction(text, label) {
   const dialog = byId('confirmation');
@@ -190,9 +191,44 @@ byId('next-period').addEventListener('click', () => {
     message('decision-message', 'Date range updated. Retrieve decisions to run the new query.');
   } catch (error) { message('decision-message', error.message, 'error'); }
 });
+async function loadOrganizationCategories() {
+  const selector = byId('organization-category');
+  try {
+    const data = await request('organization-categories', '/api/organization-categories');
+    if (!data || !Array.isArray(data.rows) || !data.rows.length) throw new Error('No valid organization categories available.');
+    const uids = new Set();
+    for (const row of data.rows) {
+      if (typeof row.uid !== 'string' || !row.uid.trim() || typeof row.label !== 'string' || !row.label.trim() || uids.has(row.uid)) {
+        throw new Error('Malformed organization-category response.');
+      }
+      uids.add(row.uid);
+    }
+    const compare = new Intl.Collator('el', {sensitivity: 'base'}).compare;
+    for (const row of [...data.rows].sort((a, b) => compare(a.label, b.label))) {
+      const option = document.createElement('option');
+      option.value = row.uid; option.textContent = row.label;
+      selector.append(option);
+    }
+    state.categoryUids = uids;
+    selector.disabled = false;
+    message('organization-message', 'Select a category, then retrieve organizations.');
+  } catch (error) {
+    // Dictionary availability must never block decisions, units or local storage.
+    message('organization-message', `${error.message || 'Category loading failed.'} Reload the page to retry categories.`, 'error');
+  }
+}
+byId('organization-category').addEventListener('change', event => {
+  byId('retrieve-organizations').disabled = !state.categoryUids.has(event.currentTarget.value);
+});
 byId('organization-form').addEventListener('submit', event => {
-  event.preventDefault(); table('organization-rows', [], []);
-  run(event.currentTarget, 'organization', '/api/organizations', Object.fromEntries(new FormData(event.currentTarget)), data => {
+  event.preventDefault();
+  const category = byId('organization-category').value;
+  if (!state.categoryUids.has(category)) {
+    message('organization-message', 'Select an organization category first.', 'error');
+    return;
+  }
+  table('organization-rows', [], []);
+  run(event.currentTarget, 'organization', '/api/organizations', {category}, data => {
     if (!Array.isArray(data.rows)) throw new Error('Malformed organization response.');
     table('organization-rows', data.rows, ['uid', 'label', 'category', row => website(row.website)]);
     message('organization-message', data.rows.length ? `${data.rows.length} ${data.rows.length === 1 ? 'organization' : 'organizations'} retrieved.` : 'No organizations found.');
@@ -206,6 +242,7 @@ byId('unit-form').addEventListener('submit', event => {
     message('unit-message', data.rows.length ? `${data.rows.length} active units retrieved.` : 'No active units found.');
   });
 });
+loadOrganizationCategories();
 request('config', '/api/config').then(config => {
   if (!config) return;
   byId('source').textContent = config.sample ? 'SYNTHETIC SAMPLE · Offline demonstration' : 'LIVE API · Diavgeia public data';

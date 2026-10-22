@@ -9,7 +9,8 @@ The current site may display maintenance notices even when individual endpoints 
 
 | Purpose | Endpoint under `https://diavgeia.gov.gr/opendata/` |
 | --- | --- |
-| Organizations | `organizations.json`, optional `category=UNIVERSITY` |
+| Organization categories | `dictionaries/ORG_CATEGORY.json` |
+| Organizations | `organizations.json?category={validated category UID}` |
 | Units | `organizations/{uid}/units.json?status=active&descendants=children` |
 | Decisions | `search.json?org={uid}&from_issue_date=YYYY-MM-DD&to_issue_date=YYYY-MM-DD&status=all&size=100&page=0` |
 
@@ -27,12 +28,30 @@ attempt. Error messages omit upstream bodies and connection details.
 
 | Route | Contract |
 | --- | --- |
+| `GET /api/organization-categories` | No query parameters. Returns `rows` containing validated category `uid` and `label`. |
+| `GET /api/organizations?category={uid}` | Exactly one nonempty category from the validated dictionary is required; returns the existing organization `rows`. No unfiltered upstream request. |
 | `GET /api/decisions` | Existing query parameters. Returns rows, completeness, counts, `snapshot_id` and `snapshot_expires_at`. No SQLite writes. |
 | `GET /api/storage` | Returns `stored_count` and `sample`. A missing database means zero, without file creation. |
 | `POST /api/storage/save` | Accepts only `{"snapshot_id":"…"}`. Upserts complete snapshot rows, returning `processed` and `stored_count`. |
 | `GET /api/snapshot/{snapshot_id}/export.csv` | Exports the server-held rows. Partial exports have `-partial.csv` in the filename and `X-Partial-Results: true`. |
 | `GET /api/storage/export.csv` | Exports the full current mode's database with `X-Record-Count`. Missing databases produce a header-only CSV. |
 | `POST /api/storage/clear` | Accepts only `{"confirm":true}`. Transactional `DELETE FROM decisions`, returning removed records as `processed` and the remaining count. |
+
+The category dictionary must identify itself as `ORG_CATEGORY` and contain a nonempty
+`items` array of objects with unique, nonblank string UIDs and nonblank labels.
+UIDs with surrounding whitespace are rejected rather than rewritten. Only UID and
+label are retained; optional parent information is unused. A fully validated result
+is cached in memory for the lifetime of that server instance, under a separate lock.
+Failed HTTP or dictionary validation attempts are not cached and return HTTP 502;
+missing/empty/unknown categories and unsupported query parameters return HTTP 400.
+Direct organization requests load the dictionary if needed before checking membership.
+Restart the server to refresh a successful cache. No database persistence is involved.
+
+The browser loads categories independently on startup, sorts labels with a Greek-aware
+alphabetical collator, and preserves original UIDs as option values. The placeholder
+cannot trigger a request. A failed category load disables only Organizations; decisions,
+units and local storage stay usable. Reload the page to retry. Sample mode exercises
+the same contracts with synthetic dictionary items in `data/sample/api.json`.
 
 Write requests require the exact local viewer Origin, JSON and a Content-Length of
 1–2048 bytes. Client-supplied rows, completeness flags, filesystem paths and extra

@@ -80,6 +80,8 @@ class SampleClient:
             selected = rows[page * size:(page + 1) * size]
             return {"decisions": selected, "info": {"page": page, "size": size,
                     "actualSize": len(selected), "total": len(rows)}}
+        if path == "dictionaries/ORG_CATEGORY.json":
+            return self.data["organization_categories"]
         if path == "organizations.json":
             rows = self.data["organizations"]
             return {"organizations": [r for r in rows if not params.get("category") or r["category"] == params["category"]]}

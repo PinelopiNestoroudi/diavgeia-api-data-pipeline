@@ -99,6 +99,24 @@ def validate_normalized(record):
             "private_data": private}
 
 
+def organization_categories(payload):
+    """Validate the ORG_CATEGORY dictionary and retain only selector fields."""
+    if (not isinstance(payload, dict) or payload.get("name") != "ORG_CATEGORY"
+            or not isinstance(payload.get("items"), list) or not payload["items"]):
+        raise ValidationError("Expected a nonempty ORG_CATEGORY dictionary.")
+    rows, seen = [], set()
+    for item in payload["items"]:
+        if not isinstance(item, dict):
+            raise ValidationError("Invalid organization category record.")
+        uid = item.get("uid")
+        if not isinstance(uid, str) or not uid.strip() or uid != uid.strip() or uid in seen:
+            raise ValidationError("Organization category UIDs must be nonblank and unique.")
+        label = text(item.get("label"), "category label", required=True)
+        seen.add(uid)
+        rows.append({"uid": uid, "label": label})
+    return rows
+
+
 def lookup_rows(payload, kind):
     if not isinstance(payload, dict) or not isinstance(payload.get(kind), list):
         raise ValidationError(f"Expected a {kind} array.")

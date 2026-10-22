@@ -54,8 +54,8 @@
     </section>
     <section id="organizations" role="tabpanel" aria-labelledby="tab-organizations" hidden>
       <h2>Explore organizations</h2>
-      <form id="organization-form"><label>Category<select name="category"><option value="">All organizations</option><option value="UNIVERSITY">Universities</option></select></label><button type="submit">Retrieve organizations</button></form>
-      <p id="organization-message" role="status" aria-live="polite">No search run yet.</p>
+      <form id="organization-form"><label>Category<select id="organization-category" name="category" required disabled><option value="" selected disabled>Select organization category</option></select></label><button id="retrieve-organizations" type="submit" disabled>Retrieve organizations</button></form>
+      <p id="organization-message" role="status" aria-live="polite">Loading organization categories…</p>
       <div class="table-wrap" role="region" aria-label="Organization results" tabindex="0"><table><caption>Organizations</caption><thead><tr><th scope="col">UID</th><th scope="col">Name</th><th scope="col">Category</th><th scope="col">Website</th></tr></thead><tbody id="organization-rows"></tbody></table></div>
     </section>
     <section id="units" role="tabpanel" aria-labelledby="tab-units" hidden>
